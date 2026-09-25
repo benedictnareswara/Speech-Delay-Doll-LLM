@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "speechllm-core"
+version = "0.3.0"
+description = "Pure routing/detection logic for SpeechLLM — no hardware, no I/O"
+requires-python = ">=3.10"
+# Deliberately empty. Everything here is stdlib, so this package cannot fail to
+# build on a device with no compiler and no network. Keep it that way: the last
+# dependency (python-Levenshtein) pulled in a rapidfuzz C extension that broke
+# an Orange Pi install, and it was replaced by 20 lines in detection/phonemes.py.
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]

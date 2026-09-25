@@ -1,0 +1,26 @@
+[project]
+name = "speechllm-workspace"
+version = "0.2.0"
+description = "SpeechLLM — Indonesian speech therapy assistant (workspace root)"
+requires-python = ">=3.10"
+
+# Nothing is installed from this root project; it exists to hold shared
+# tool configuration. Install the individual packages instead:
+#
+#   pip install -e packages/speechllm-core
+#   pip install -e packages/speechllm-device   # Orange Pi only
+#   pip install -r tools/requirements-tools.txt
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "hardware: requires the Orange Pi, DFPlayer or a microphone (deselect with -m 'not hardware')",
+]
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

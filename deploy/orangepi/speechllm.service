@@ -1,0 +1,47 @@
+[Unit]
+Description=SpeechLLM — Indonesian speech therapy assistant
+Documentation=file:/opt/speechllm/CLAUDE.md
+After=sound.target
+# No network dependency on purpose: this unit is designed to work with WiFi off.
+
+# If it crash-loops 5 times in 5 minutes, stop and leave the logs intact rather
+# than hammering the SD card with restarts. These belong in [Unit]; systemd has
+# ignored them in [Service] since v229.
+StartLimitBurst=5
+StartLimitIntervalSec=300
+
+[Service]
+Type=simple
+User=speechllm
+# audio: microphone access. dialout: the DFPlayer's serial port.
+#
+# `gpio` is deliberately NOT listed. It is created by some Orange Pi BSP images
+# and not others, and systemd treats an unknown group here as fatal — the unit
+# dies with status=216/GROUP before it runs a single line of Python. install.sh
+# adds the service user to `gpio` with usermod when the group exists, and
+# systemd picks up user-database memberships on its own, so listing it here
+# buys nothing and breaks every image that lacks it.
+SupplementaryGroups=audio dialout
+
+EnvironmentFile=/etc/speechllm/device.env
+WorkingDirectory=/opt/speechllm
+ExecStart=/opt/speechllm/.venv/bin/python -m speechllm_device
+
+# Models take several seconds to load on an A53; don't let systemd give up early.
+TimeoutStartSec=120
+Restart=always
+RestartSec=5
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=speechllm
+
+# ── Hardening ────────────────────────────────────────────────
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/log/speechllm
+
+[Install]
+WantedBy=multi-user.target
