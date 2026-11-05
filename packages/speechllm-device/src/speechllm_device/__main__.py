@@ -53,7 +53,13 @@ def _build_sink(dry_run: bool, manifest: BankManifest):
     player.open()
     player.set_volume(settings.dfplayer_volume)
 
-    busy = open_busy_pin(settings.dfplayer_gpiochip, settings.dfplayer_busy_gpio)
+    busy = open_busy_pin(
+        settings.dfplayer_gpiochip,
+        settings.dfplayer_busy_gpio,
+        force_mock=not settings.dfplayer_busy_wired,
+    )
+    if not settings.dfplayer_busy_wired:
+        logger.info("BUSY line not wired: playback timed from manifest durations")
     logger.info(
         "Audio sink: DFPlayer on %s, volume %d/30", settings.dfplayer_port, settings.dfplayer_volume
     )

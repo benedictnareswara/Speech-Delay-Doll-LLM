@@ -18,10 +18,9 @@ Hardware reference (pinouts, GPIO numbering, troubleshooting table) lives in [RE
 - [ ] **Two** microSD cards — one for the Pi's OS (16 GB+, A1/A2 rated), one for the DFPlayer (**≤32 GB**; 4 GB is plenty)
 - [ ] USB microphone
 - [ ] DFPlayer Mini
-- [ ] PAM8403 (or PAM8302) amplifier module
 - [ ] Speaker, 4Ω 3W
-- [ ] 5V 3A power supply
-- [ ] 1kΩ resistor, 470µF electrolytic + 100nF ceramic capacitor
+- [ ] Powerbank, 5V 3A (10,000 mAh) + USB-A → USB-C cable
+- [ ] 1kΩ resistor
 - [ ] Jumper wires, breadboard or perfboard
 - [ ] USB-C cable, Ethernet cable
 - [ ] **USB-TTL serial adapter (3.3V, CH340 or CP2102).** Listed as optional in older versions of this doc — treat it as required. It is both the debug console *and* the fallback that bypasses the UART overlay entirely (Phase 3).
@@ -371,21 +370,19 @@ diskutil eject /Volumes/BANK
 
 ## Phase 5 — Test the DFPlayer alone
 
-**Do this before connecting anything to the Pi.** It proves the module, the card, the amp and the speaker all work, with zero software involved. If you skip it and the assembled device is silent, you won't know which of five things is at fault.
+**Do this before connecting anything to the Pi.** It proves the module, the card and the speaker all work, with zero software involved. If you skip it and the assembled device is silent, you won't know which of five things is at fault.
 
 Wire only this:
 
 ```
-5V supply + ──────► DFPlayer VCC (1)
-5V supply − ──────► DFPlayer GND (7)
-                    470µF + 100nF across VCC/GND
+5V (bench supply or USB breakout) + ──► DFPlayer VCC (1)
+5V (bench supply or USB breakout) − ──► DFPlayer GND (7)
 
-DFPlayer DAC_R (4) ──► PAM8403 R-IN
-DFPlayer GND   (7) ──► PAM8403 GND
-5V supply +        ──► PAM8403 VCC
-PAM8403 R-OUT+     ──► Speaker +
-PAM8403 R-OUT−     ──► Speaker −
+DFPlayer SPK_1 (6) ──► Speaker +   (4Ω 3W)
+DFPlayer SPK_2 (8) ──► Speaker −
 ```
+
+Neither SPK terminal may be tied to GND — the onboard amplifier is a bridge-tied output.
 
 Insert the prepared card, apply power. Wait ~2 seconds for the card to mount, then **briefly touch IO_2 (pin 11) to GND** — that's the module's built-in "next track" button.
 
@@ -395,7 +392,7 @@ You should hear an Indonesian phrase.
 
 **✅ Checkpoint:** touching IO_2 to GND plays audible, clean speech.
 
-**If nothing plays:** re-check the card is FAT32/MBR with a `01` folder; confirm the amp has power; try the other amp channel; measure 5V actually present at DFPlayer pin 1 under load.
+**If nothing plays:** re-check the card is FAT32/MBR with a `01` folder; confirm the speaker is on pins 6 and 8 (not 9/10, which are GND); measure 5V actually present at DFPlayer pin 1 under load.
 
 ---
 
@@ -403,7 +400,7 @@ You should hear an Indonesian phrase.
 
 **Power everything off first.** The Pi's GPIO is 3.3V and **not 5V tolerant** — a slip here kills the pin or the SoC.
 
-Add to what you already built in Phase 5, depending on which serial route you took in Phase 3.
+Move the DFPlayer's VCC/GND from the Phase 5 test supply onto the Pi (pin 2 = 5V, pin 6 = GND), keep the speaker on SPK_1/SPK_2, and add the serial wires depending on which serial route you took in Phase 3. The DFPlayer's BUSY pin (16) is **not** wired in this build — see the note below.
 
 **Option A — USB-TTL adapter (recommended):**
 
@@ -416,11 +413,11 @@ RX               ───────────────────  TX  
 
 Orange Pi Zero 3
 ─────────────────
-pin 6  (GND)     ───────────────────  common ground rail
-pin 11 (PI0)     ───────────────────  BUSY  (16)
+pin 2  (5V)      ───────────────────  VCC   (1)
+pin 6  (GND)     ───────────────────  GND   (7)     ← common ground
 ```
 
-The BUSY line still goes to the Pi — it is what gates the microphone. The adapter, the DFPlayer and the Pi must all share one ground.
+The adapter, the DFPlayer and the Pi must all share one ground.
 
 **Option B — UART5 on the header:**
 
@@ -428,17 +425,19 @@ The BUSY line still goes to the Pi — it is what gates the microphone. The adap
 Orange Pi Zero 3                     DFPlayer Mini
 ─────────────────                    ─────────────
 pin 6  (GND)     ───────────────────  GND   (7)     ← common ground, connect FIRST
+pin 2  (5V)      ───────────────────  VCC   (1)
 pin 8  (PH2/TX5) ──[1kΩ]────────────  RX    (2)
 pin 10 (PH3/RX5) ───────────────────  TX    (3)
-pin 11 (PI0)     ───────────────────  BUSY  (16)
 ```
+
+**BUSY is not wired.** With `DFPLAYER_BUSY_WIRED=0` (the default) the software keeps the microphone gated for each track's duration from the manifest, plus `SPEAK_COOLDOWN_MS`. *Optional:* a jumper from DFPlayer BUSY (16) to Pi pin 11 (`PI0`) gates on real playback state instead — set `DFPLAYER_BUSY_WIRED=1` if you add it.
 
 Four rules, either way:
 
 1. **Common ground first, always.** Signal wires between boards that don't share a ground reference can destroy inputs.
 2. **The 1kΩ goes in series on TX → DFPlayer RX.** It suppresses audible switching noise. DFPlayer TX → RX connects directly.
 3. **TX goes to RX, RX goes to TX.** Crossed, not straight. This is the single most common wiring mistake.
-4. **Do not power the DFPlayer from the Pi's 5V header pins.** With the amp attached, playback current spikes will brown out the SoC and can corrupt the OS card mid-write. Feed both from the 5V rail, sharing one star ground with the Pi.
+4. **The DFPlayer takes 5V from header pin 2, which shares the powerbank's input rail.** Use a powerbank rated for 3A, and keep `DFPLAYER_VOLUME` moderate (default 22/30) — the 4Ω speaker on the onboard amp draws more current than an 8Ω one, and spikes at high volume can brown out the Pi.
 
 Before applying power, check continuity with a multimeter: the two grounds should read near zero ohms; TX ↔ DFPlayer pin 2 should read ~1kΩ.
 
@@ -574,7 +573,7 @@ sudo -u speechllm /opt/speechllm/.venv/bin/python -m speechllm_device --verbose
 
 Say "ma" → you should hear a Mama phrase within about three seconds. If it hangs at startup instead, the Whisper weights aren't staged where the service can read them — `doctor.sh` checks exactly that.
 
-**The test that matters most:** say ten things in a row. If the device ever responds to *itself* — a reply immediately triggering another reply with no one speaking — the BUSY pin isn't working. Check the wire to pin 11 and that `DFPLAYER_BUSY_GPIO=256`.
+**The test that matters most:** say ten things in a row. If the device ever responds to *itself* — a reply immediately triggering another reply with no one speaking — the microphone is re-opening too early. Raise `SPEAK_COOLDOWN_MS` to 500. (If you added the optional BUSY jumper, also check `DFPLAYER_BUSY_WIRED=1` and `DFPLAYER_BUSY_GPIO=256`.)
 
 ### M6 — Run as a service
 
@@ -603,7 +602,7 @@ Edit `/etc/speechllm/device.env`, then `sudo systemctl restart speechllm`.
 | Triggers on room noise | `VAD_THRESHOLD` | raise to 0.6–0.7 |
 | Misses quiet sounds | `VAD_THRESHOLD` | lower to 0.35–0.4 |
 | Too loud / too quiet | `DFPLAYER_VOLUME` | 0–30, default 22 |
-| Responds to its own voice | `SPEAK_COOLDOWN_MS` | raise to 500 — but fix the BUSY pin first |
+| Responds to its own voice | `SPEAK_COOLDOWN_MS` | raise to 500 |
 
 Review real sessions to guide this:
 
@@ -632,11 +631,11 @@ Start with `sudo /opt/speechllm/deploy/orangepi/doctor.sh` — it covers most of
 | `bad interpreter: /bin/bash^M` | CRLF line endings from a Windows checkout — see `.gitattributes` in Phase 7 |
 | `ImportError: cannot import name 'Editops'` | A damaged package survived in the venv. Re-run `install.sh`; it now rebuilds with `venv --clear` |
 | `module 'yaml' has no attribute 'dump'` | Same cause as above |
-| DFPlayer silent, BUSY toggles | Amp unpowered, or speaker on SPK_1/SPK_2 instead of DAC_R |
+| DFPlayer silent | Speaker not on SPK_1 (6) / SPK_2 (8), a speaker terminal tied to GND, or volume 0 |
 | Wrong phrase every time | Stray metadata files on the card shifting indexes |
 | Error 0x06 "track not found" | File missing, or queried before the card mounted (~2 s) |
 | Module resets mid-phrase | Power brownout — separate supply, add the bulk capacitor |
-| Device talks to itself | BUSY pin not wired, or wrong GPIO number |
+| Device talks to itself | Mic re-opens too early — raise `SPEAK_COOLDOWN_MS`; with the optional BUSY jumper, check `DFPLAYER_BUSY_WIRED=1` |
 | Whisper hangs at startup | Models staged under the wrong `HF_HOME` while `HF_HUB_OFFLINE=1` |
 | Refuses to start, bank mismatch | `templates.py` changed since the card was burned — re-render, re-copy |
 | Random filesystem corruption | Cheap SD card, or the Pi is being browned out by playback |

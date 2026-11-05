@@ -137,7 +137,16 @@ class Settings:
     dfplayer_baud: int = 9600
     # 0-30
     dfplayer_volume: int = field(default_factory=lambda: _env_int("DFPLAYER_VOLUME", 22))
-    # BUSY pin: PI0 on the 26-pin header, physical pin 11.
+    # Whether the DFPlayer BUSY line (module pin 16) is wired to the Pi.
+    # The reference build does NOT wire it: playback is then timed from the
+    # manifest's per-track durations instead, and the GPIO is never opened, so
+    # an unconnected (floating) header pin cannot stall the pipeline.
+    # Set DFPLAYER_BUSY_WIRED=1 only if you add the BUSY → pin 11 jumper.
+    dfplayer_busy_wired: bool = field(
+        default_factory=lambda: _env_str("DFPLAYER_BUSY_WIRED", "0").strip().lower()
+        in ("1", "true", "yes", "on")
+    )
+    # BUSY pin (only used when wired): PI0 on the 26-pin header, physical pin 11.
     # Allwinner BSP numbering is bank_index*32 + pin, banks A=0..I=8 → 8*32+0.
     dfplayer_busy_gpio: int = field(default_factory=lambda: _env_int("DFPLAYER_BUSY_GPIO", 256))
     dfplayer_gpiochip: str = field(
@@ -159,7 +168,7 @@ class Settings:
         default_factory=lambda: _env_int("THINKING_CHIME_MIN_GAP_MS", 5000)
     )
     # Hard ceiling on how long we wait for BUSY to clear, in case the pin is
-    # miswired or the module resets mid-track.
+    # miswired or the module resets mid-track. Unused when BUSY is not wired.
     playback_timeout_s: float = field(
         default_factory=lambda: _env_float("PLAYBACK_TIMEOUT_S", 15.0)
     )

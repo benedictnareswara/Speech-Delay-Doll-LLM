@@ -13,7 +13,7 @@ A toddler babbles into a USB microphone. The device recognizes the sound, maps i
                                                                     │
                                                           [Phrase Bank lookup]
                                                                     │
-                              🔊 Speaker ← [PAM8403 amp] ← [DFPlayer Mini: play track 47]
+                                       🔊 Speaker ← [DFPlayer Mini: play track 47]
 ```
 
 The key design decision: **the DFPlayer Mini plays numbered MP3s from its own SD card and cannot speak text generated at runtime.** So all 105 therapy phrases are rendered to audio once, on a laptop, using a high-quality Indonesian voice, and burned to that card. At runtime the Pi only decides *which track to play*.
@@ -101,9 +101,9 @@ Only changed phrases are re-synthesized, so editing one template costs one API c
 | Orange Pi Zero 3 | Allwinner H618, quad Cortex-A53 |
 | USB microphone | Any UAC capsule |
 | DFPlayer Mini + microSD | FAT32, ≤32 GB, separate from the OS card |
-| PAM8403 amp | Required — do not drive a 4Ω speaker from the DFPlayer directly |
-| Speaker 4Ω 3W | |
-| 5V 3A supply | Do not power the DFPlayer from the Pi's header alone |
+| Speaker 4Ω 3W | Driven directly from DFPlayer SPK_1 (6) / SPK_2 (8) |
+| 1kΩ resistor | Series on the Pi TX → DFPlayer RX line |
+| Powerbank, 5V 3A, 10,000 mAh | Feeds the Pi's USB-C; the DFPlayer takes 5V from header pin 2 |
 
 **First-time setup:** [deploy/orangepi/SETUP.md](deploy/orangepi/SETUP.md) walks you from flashing the SD card to a running service, with a checkpoint at every stage.
 

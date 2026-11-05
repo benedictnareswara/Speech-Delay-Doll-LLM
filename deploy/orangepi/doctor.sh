@@ -28,6 +28,7 @@ if [[ -f "$CONFIG" ]]; then
 fi
 DFPLAYER_PORT="${DFPLAYER_PORT:-/dev/ttyS5}"
 DFPLAYER_BUSY_GPIO="${DFPLAYER_BUSY_GPIO:-256}"
+DFPLAYER_BUSY_WIRED="${DFPLAYER_BUSY_WIRED:-0}"
 AUDIO_INPUT_DEVICE="${AUDIO_INPUT_DEVICE:-}"
 HF_HOME="${HF_HOME:-$PREFIX/models/hf}"
 
@@ -148,13 +149,19 @@ else
 fi
 
 # ── GPIO (DFPlayer BUSY line) ────────────────────────────────
-section "BUSY pin (GPIO $DFPLAYER_BUSY_GPIO / PI0 / physical pin 11)"
-if "$VENV" -c "import gpiod" 2>/dev/null; then
+case "${DFPLAYER_BUSY_WIRED,,}" in 1|true|yes|on) BUSY_WIRED=1 ;; *) BUSY_WIRED=0 ;; esac
+if [[ $BUSY_WIRED -eq 0 ]]; then
+    section "BUSY pin (not wired)"
+    ok "DFPLAYER_BUSY_WIRED=0 — playback timed from manifest durations, no GPIO used"
+elif "$VENV" -c "import gpiod" 2>/dev/null; then
+    section "BUSY pin (GPIO $DFPLAYER_BUSY_GPIO / PI0 / physical pin 11)"
     ok "libgpiod available inside the venv (preferred backend)"
 elif [[ -d /sys/class/gpio ]]; then
+    section "BUSY pin (GPIO $DFPLAYER_BUSY_GPIO / PI0 / physical pin 11)"
     soft "libgpiod not in the venv; falling back to the sysfs backend"
     fix "re-run install.sh — it links the apt python3-libgpiod into the venv"
 else
+    section "BUSY pin (GPIO $DFPLAYER_BUSY_GPIO / PI0 / physical pin 11)"
     bad "neither libgpiod nor sysfs GPIO is available"
     fix "playback will be timed from manifest durations instead of the BUSY line"
 fi

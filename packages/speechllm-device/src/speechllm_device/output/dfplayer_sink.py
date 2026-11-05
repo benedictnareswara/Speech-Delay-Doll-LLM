@@ -96,6 +96,12 @@ class DFPlayerSink:
 
     def _wait_for_playback(self, expected_ms: int | None) -> None:
         """Block until BUSY clears, or fall back to the manifest duration."""
+        # 0. No BUSY wire: there is nothing to poll, so time playback from the
+        #    manifest directly rather than first burning BUSY_ASSERT_TIMEOUT_S.
+        if not getattr(self._busy, "available", True):
+            time.sleep((expected_ms or 2000) / 1000.0)
+            return
+
         # 1. Wait for BUSY to assert, confirming the track actually started.
         deadline = time.monotonic() + BUSY_ASSERT_TIMEOUT_S
         started = False

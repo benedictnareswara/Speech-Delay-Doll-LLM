@@ -5,7 +5,9 @@ The DFPlayer's BUSY pin (module pin 16) is LOW while audio is playing and HIGH
 when idle. It is wired to PI0, physical pin 11 on the Orange Pi Zero 3's 26-pin
 header.
 
-This is the ground truth for "the device is currently speaking", and the
+OPTIONAL. The reference build does not wire BUSY (DFPLAYER_BUSY_WIRED=0); the
+mock backend is then forced and playback is timed from manifest durations.
+When it IS wired, it is the ground truth for "the device is currently speaking", and the
 pipeline uses it to keep the microphone gated. Without it the speaker — inches
 from the mic — gets transcribed as if it were the child, and the device talks
 to itself in a loop.

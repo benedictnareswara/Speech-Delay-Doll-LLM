@@ -18,12 +18,10 @@ Hardware reference for the SpeechLLM prototype: pinouts, wiring, and troubleshoo
 | Orange Pi Zero 3 | Allwinner H618, quad Cortex-A53. 1 GB works; 2 GB+ is comfortable |
 | USB microphone | Any UAC-compliant capsule; most only do 44.1/48 kHz (handled in software) |
 | DFPlayer Mini | Plus its **own** microSD card, FAT32, ≤32 GB |
-| PAM8403 or PAM8302 amp | ~$1. Required — see the speaker warning below |
-| Speaker, 4Ω 3W | |
-| 5V 3A supply | Feeding a small distribution rail |
-| 1kΩ resistor | Series on the DFPlayer RX line |
-| 470µF + 100nF capacitors | Across DFPlayer VCC/GND |
-| USB-TTL adapter, 3.3V | CH340/CP2102. Debug console *and* the zero-config serial route |
+| Speaker, 4Ω 3W | Driven directly from DFPlayer SPK_1 / SPK_2 |
+| Powerbank, 5V 3A, 10,000 mAh | USB-A output → Orange Pi USB-C |
+| 1kΩ resistor | Series on the Pi TX → DFPlayer RX line |
+| USB-TTL adapter, 3.3V *(optional)* | CH340/CP2102. Debug console *and* the zero-config serial route |
 
 Note there are **two** SD cards: one holds the Pi's OS, the other lives inside the DFPlayer and holds the phrase bank. The Pi cannot read the DFPlayer's card.
 
@@ -33,14 +31,12 @@ Printed pinout diagrams label these inconsistently, so here is every name for th
 
 | Physical pin | Allwinner | sysfs GPIO | wiringOP | Function here | Connects to |
 |---|---|---|---|---|---|
-| 2 / 4 | — | — | — | 5V | *(rail only — do **not** power the DFPlayer from here)* |
-| 6 | — | — | — | GND | Common ground rail |
+| 2 | — | — | — | 5V | → DFPlayer VCC (1) |
+| 6 | — | — | — | GND | → DFPlayer GND (7) — common ground |
 | 8 | `PH2` | 226 | 3 | UART5_TX | → 1kΩ → DFPlayer RX (2) |
 | 10 | `PH3` | 227 | 4 | UART5_RX | ← DFPlayer TX (3) |
-| 11 | `PI0` | **256** | 6 | GPIO input | ← DFPlayer BUSY (16) |
-| 9, 14, 20, 25 | — | — | — | GND | Additional ground returns |
 
-The sysfs number is `bank_index × 32 + pin`, with banks A=0 … I=8. So `PI0` = 8×32 + 0 = **256**, which is what `DFPLAYER_BUSY_GPIO` is set to. `PH2` = 7×32 + 2 = 226 — worth remembering, because that number shows up in kernel pin-conflict errors.
+`PH2` = 7×32 + 2 = 226 in sysfs numbering (`bank_index × 32 + pin`, banks A=0 … I=8) — worth remembering, because that number shows up in kernel pin-conflict errors.
 
 The serial debug console lives on the **separate 3-pin header** (UART0 / `PH0`,`PH1`), so using UART5 here does not conflict with it.
 
@@ -48,36 +44,45 @@ The serial debug console lives on the **separate 3-pin header** (UART0 / `PH0`,`
 
 Two rows of 8:
 
-- Left, top→bottom: `VCC(1) RX(2) TX(3) DAC_R(4) DAC_L(5) SPK_2(6) GND(7) SPK_1(8)`
+- Left, top→bottom: `VCC(1) RX(2) TX(3) DAC_R(4) DAC_L(5) SPK_1(6) GND(7) SPK_2(8)`
 - Right, bottom→top: `IO_1(9) GND(10) IO_2(11) ADKEY_1(12) ADKEY_2(13) USB+(14) USB-(15) BUSY(16)`
 
 ## Connections
 
-The DFPlayer and the amp run from the **5V rail**, never from the Pi's header pins — see the power note below.
+| From | Pin | To | Pin | Purpose |
+|---|---|---|---|---|
+| Powerbank | USB-A output | Orange Pi Zero 3 | USB-C power input | 5V power to the Pi |
+| Orange Pi Zero 3 | Pin 2 / 5V | DFPlayer Mini | Pin 1 / VCC | 5V power |
+| Orange Pi Zero 3 | Pin 8 / UART5 TX (PH2) | 1kΩ resistor → DFPlayer Mini | Pin 2 / RX | TX → RX |
+| Orange Pi Zero 3 | Pin 10 / UART5 RX (PH3) | DFPlayer Mini | Pin 3 / TX | RX ← TX, no resistor |
+| Orange Pi Zero 3 | Pin 6 / GND | DFPlayer Mini | Pin 7 / GND | Common ground |
+| DFPlayer Mini | Pin 6 / SPK_1 | Speaker | Positive (+) | Speaker audio |
+| DFPlayer Mini | Pin 8 / SPK_2 | Speaker | Negative (−) | Speaker audio |
+| USB microphone | USB plug | Orange Pi Zero 3 | USB-A port | Direct USB connection |
 
 ```
-        5V 3A supply
-             │
-   ┌─────────┼───────────────┬──────────────────┐
-   │         │               │                  │
-Orange Pi   DFPlayer VCC(1)  PAM8403 VCC        (star ground to all three)
- USB-C       + 470µF/100nF
-             │
+Powerbank 5V/3A ── USB-A → USB-C ──► Orange Pi Zero 3
+
 Orange Pi Zero 3                     DFPlayer Mini
 ─────────────────                    ─────────────
-pin 6  (GND)     ───────┬───────────  GND   (7)
-                        └───────────  GND   (10)
+pin 2  (5V)      ───────────────────  VCC   (1)
+pin 6  (GND)     ───────────────────  GND   (7)
 pin 8  (PH2/TX5) ──[1kΩ]────────────  RX    (2)
 pin 10 (PH3/RX5) ───────────────────  TX    (3)
-pin 11 (PI0/256) ───────────────────  BUSY  (16)     LOW while playing
 
-DFPlayer DAC_R (4) ───────────────►  PAM8403  R-IN
-DFPlayer GND   (7) ───────────────►  PAM8403  GND
-                   PAM8403 R-OUT+ ─►  Speaker +   (4Ω 3W)
-                   PAM8403 R-OUT- ─►  Speaker −
+                         DFPlayer SPK_1 (6) ──►  Speaker +   (4Ω 3W)
+                         DFPlayer SPK_2 (8) ──►  Speaker −
 
 USB microphone ──────────────────►  either USB-A port (no wiring)
 ```
+
+The SD card with the audio files goes into the DFPlayer Mini's own slot.
+
+### BUSY line (not wired)
+
+The DFPlayer's BUSY pin (16) is **not** connected in this build. With `DFPLAYER_BUSY_WIRED=0` (the default) the software never opens a GPIO for it; after sending a play command it keeps the microphone gated for that track's duration, read from `assets/bank/manifest.json`, plus `SPEAK_COOLDOWN_MS`.
+
+*Optional upgrade:* a jumper from DFPlayer BUSY (16) to header pin 11 (`PI0`, sysfs 256) lets the software gate on the real playback state instead. Set `DFPLAYER_BUSY_WIRED=1` in `device.env` if you add it.
 
 ### Serial without the device tree
 
@@ -89,25 +94,15 @@ USB-TTL TX  ──[1kΩ]────────  DFPlayer RX  (2)
 USB-TTL RX  ───────────────  DFPlayer TX  (3)
 ```
 
-BUSY still goes to Pi pin 11 either way — that line is what gates the microphone, and nothing else can replace it.
+### Speaker and power notes
 
-### ⚠️ Do not connect the 4Ω speaker to SPK_1/SPK_2
-
-The DFPlayer's onboard amplifier is specified for 3W into **8Ω**. A 4Ω load roughly doubles the current draw, which causes distortion, thermal throttling, and brownouts that reset the module mid-sentence. It is also a bridge-tied output, so neither terminal may be grounded.
-
-Use the `DAC_R` line-out into a PAM8403 as drawn. *(Alternative if you'd rather buy nothing: swap to an 8Ω 3W speaker and drive SPK_1/SPK_2 directly, skipping the amp.)*
-
-### ⚠️ Power
-
-Do not run the DFPlayer **or** the amp from the Pi's header pins. Playback current spikes will brown out the SoC and can corrupt the OS SD card mid-write.
-
-Use a 5V/3A supply feeding a small distribution rail, with the Pi's USB-C, the DFPlayer VCC and the amp VCC as separate branches sharing one **star ground**. Fit 470µF electrolytic + 100nF ceramic across DFPlayer VCC/GND.
-
-The Zero 3's Type-C port is **power only** — not a data or OTG port.
+- The DFPlayer's onboard amplifier is a bridge-tied output: neither SPK terminal may be grounded, and polarity only matters for phase.
+- It is rated 3W into 8Ω; with the 4Ω speaker used here, keep `DFPLAYER_VOLUME` moderate (default 22/30). If you hear distortion or the module resets mid-sentence, lower the volume first.
+- The DFPlayer draws its 5V from header pin 2, which shares the powerbank's input rail. Use a powerbank rated for 3A so playback current spikes do not brown out the Pi.
 
 ### ⚠️ Logic levels
 
-Orange Pi GPIO is 3.3V and **not 5V tolerant**. The DFPlayer's TX and BUSY idle at 3.3V so they connect directly. The 1kΩ on RX is the standard series resistor that suppresses audible switching noise.
+Orange Pi GPIO is 3.3V and **not 5V tolerant**. The DFPlayer's TX idles at 3.3V so it connects directly. The 1kΩ on RX is the standard series resistor that suppresses audible switching noise.
 
 ## Board configuration
 
@@ -225,8 +220,8 @@ sudo systemctl start speechllm && journalctl -u speechllm -f
 | `cannot import name 'Editops'` / `'yaml' has no attribute 'dump'` | A damaged package survived in the venv; re-run `install.sh`, which rebuilds it with `venv --clear` |
 | DFPlayer plays the wrong phrase | Stray metadata files on the card, or code 0x03 used instead of 0x0F |
 | "track not found" (error 0x06) | File missing, or the module was queried before the card mounted (~2 s) |
-| Module resets mid-phrase | Power brownout — separate supply, add the bulk capacitor |
-| Device replies to itself in a loop | BUSY pin not wired or wrong GPIO number; check `DFPLAYER_BUSY_GPIO=256` |
-| No audio at all, BUSY toggles correctly | Amp not powered, or speaker wired to SPK_1/SPK_2 instead of DAC_R |
+| Module resets mid-phrase | Power brownout — lower `DFPLAYER_VOLUME`, use a 3A-rated powerbank, optionally add a 470µF capacitor across DFPlayer VCC/GND |
+| Device replies to itself in a loop | Raise `SPEAK_COOLDOWN_MS` (e.g. 500). If you added the BUSY jumper, check `DFPLAYER_BUSY_WIRED=1` and `DFPLAYER_BUSY_GPIO=256` |
+| No audio at all | Speaker not on SPK_1 (6) / SPK_2 (8), a speaker terminal tied to GND, or volume 0 |
 | Whisper hangs at startup | Weights staged under a different `HF_HOME` than the service reads, with `HF_HUB_OFFLINE=1` |
 | Refuses to start: bank mismatch | `templates.py` changed since the card was burned — re-render and re-copy |
